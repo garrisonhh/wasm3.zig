@@ -27,11 +27,13 @@ pub fn main() !void {
     var module = try w3.Module.parse(env, &bytecode);
     errdefer module.deinit();
 
+    std.debug.print("module: {s}\n", .{module.getName()});
+
     try runtime.load(&module);
 
     const main_func = try runtime.findFunction("main");
+    std.debug.print("found func: {s}\n", .{main_func.getName()});
 
-    // TODO zig interface
     var buf: [256]u8 = undefined;
     const results = try main_func.callBuf(&buf, &.{});
 

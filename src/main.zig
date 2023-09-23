@@ -12,6 +12,12 @@ pub const c = @cImport({
     @cInclude("wasm3.h");
 });
 
+fn rawCStrToSlice(raw_cstr: [*c]const u8) [:0]const u8 {
+    const cstr = @as([*:0]const u8, @ptrCast(raw_cstr));
+    const len = std.mem.indexOfSentinel(u8, 0, cstr);
+    return cstr[0..len:0];
+}
+
 // errors ======================================================================
 
 const ErrorTableEntry = struct {
@@ -308,12 +314,9 @@ pub const Module = struct {
         c.m3_SetModuleName(self.ptr, name.ptr);
     }
 
-    pub fn getName(self: Self) ?[:0]const u8 {
-        if (c.m3_GetModuleName(self.ptr)) |cstr| {
-            return cstr[0..:0];
-        }
-
-        return null;
+    pub fn getName(self: Self) [:0]const u8 {
+        const raw_cstr = c.m3_GetModuleName(self.ptr);
+        return rawCStrToSlice(raw_cstr);
     }
 };
 
@@ -323,7 +326,8 @@ pub const Function = struct {
     ptr: c.IM3Function,
 
     pub fn getName(self: Self) [:0]const u8 {
-        return c.m3_GetFunctionName(self.ptr).?[0..:0];
+        const raw_cstr = c.m3_GetFunctionName(self.ptr);
+        return rawCStrToSlice(raw_cstr);
     }
 
     pub fn getArgCount(self: Self) usize {
