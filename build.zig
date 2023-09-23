@@ -22,7 +22,7 @@ fn addCSources(b: *Build, com: *Build.Step.Compile) !void {
         const ext = fs.path.extension(entry.path);
         if (!std.mem.eql(u8, ext, ".c")) continue;
 
-        const path = try fs.path.join(ally, &.{wasm3_source_dir, entry.path});
+        const path = try fs.path.join(ally, &.{ wasm3_source_dir, entry.path });
         defer ally.free(path);
 
         com.addCSourceFile(.{
@@ -32,25 +32,12 @@ fn addCSources(b: *Build, com: *Build.Step.Compile) !void {
     }
 }
 
+/// builds the  example
 pub fn build(b: *Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const lib = b.addStaticLibrary(.{
-        .name = "wasm3",
-        .target = target,
-        .optimize = optimize,
-    });
-
-    lib.linkLibC();
-    lib.addIncludePath(.{ .path = wasm3_source_dir });
-    addCSources(b, lib) catch |e| {
-        std.debug.panic("unhandled error: {s}", .{@errorName(e)});
-    };
-
-    b.installArtifact(lib);
-
-    const module = b.addModule("wasm3", .{
+    const module = b.createModule(.{
         .source_file = .{ .path = "src/main.zig" },
     });
 
@@ -61,7 +48,20 @@ pub fn build(b: *Build) void {
         .optimize = optimize,
     });
 
-    example.step.dependOn(&lib.step);
+    b.installArtifact(example);
+
+    example.linkLibC();
+    example.addIncludePath(.{ .path = wasm3_source_dir });
+    addCSources(b, example) catch |e| {
+        std.debug.panic("unhandled error: {s}", .{@errorName(e)});
+    };
+
+    if (optimize == .Debug) {
+        example.defineCMacro("DEBUG", null);
+    } else {
+        example.defineCMacro("NDEBUG", null);
+    }
+
     example.addModule("wasm3", module);
 
     const run_example = b.addRunArtifact(example);
