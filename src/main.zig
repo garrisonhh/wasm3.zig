@@ -1,4 +1,9 @@
+//! this is a zig wrapper over wasm3 that aims to be as thin as possible. no
+//! extra allocations or big computations, just make the c interface look as
+//! ziggy as possible with the constraints
+
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 const builtin = @import("builtin");
 const in_debug = builtin.mode == .Debug;
 
@@ -101,6 +106,100 @@ fn check(res: c.M3Result) Error!void {
 
 // main interface ==============================================================
 
+pub const ValueType = enum {
+    const Self = @This();
+
+    i32,
+    i64,
+    f32,
+    f64,
+
+    const TableEntry = struct {
+        val: Self,
+        cval: c_int,
+    };
+
+    const table = [_]TableEntry{
+        .{ .val = .i32, .cval = c.c_m3Type_i32 },
+        .{ .val = .i64, .cval = c.c_m3Type_i64 },
+        .{ .val = .f32, .cval = c.c_m3Type_f32 },
+        .{ .val = .f64, .cval = c.c_m3Type_f64 },
+    };
+
+    fn fromC(n: c_uint) ?Self {
+        inline for (table) |entry| {
+            if (n == entry.cval) {
+                return entry.val;
+            }
+        }
+
+        return null;
+    }
+
+    fn intoC(self: Self) c_uint {
+        inline for (table) |entry| {
+            if (entry.val == self) {
+                return entry.cval;
+            }
+        }
+
+        unreachable;
+    }
+};
+
+pub const Value = union(ValueType) {
+    const Self = @This();
+
+    i32: i32,
+    i64: i64,
+    f32: f32,
+    f64: f64,
+
+    fn fromC(cval: c.M3TaggedValue) Self {
+        return switch (ValueType.fromC(cval.type).?) {
+            inline else => |data, tag| @unionInit(Self, @tagName(tag), data),
+        };
+    }
+
+    fn intoC(self: Self) c.M3TaggedValue {
+        return switch (self) {
+            inline else => |data, tag| .{
+                .type = tag.intoC(),
+                .value = @unionInit(c.union_M3ValueUnion, @tagName(tag), data),
+            },
+        };
+    }
+
+    /// get a pointer to the data (this is useful for some c interfacing
+    /// operations)
+    fn ptrMut(self: *Self) *anyopaque {
+        return switch (self.*) {
+            inline else => |_, tag| &@field(self, @tagName(tag)),
+        };
+    }
+
+    /// get a pointer to the data (this is useful for some c interfacing
+    /// operations)
+    fn ptr(self: *const Self) *const anyopaque {
+        return switch (self.*) {
+            inline else => |_, tag| &@field(self, @tagName(tag)),
+        };
+    }
+
+    pub fn format(
+        self: Self,
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
+        writer: anytype,
+    ) @TypeOf(writer).Error!void {
+        switch (self) {
+            inline else => |data, tag| {
+                try writer.print("({s}){d}", .{ @tagName(tag), data });
+            },
+        }
+    }
+};
+
 /// global execution environment, which can host multiple runtimes
 pub const Environment = struct {
     const Self = @This();
@@ -167,7 +266,6 @@ pub const Module = struct {
     const Self = @This();
 
     ptr: c.IM3Module,
-    name: ?[:0]const u8 = null,
     loaded: bool = false,
 
     pub fn parse(env: Environment, bytecode: []const u8) Error!Self {
@@ -211,7 +309,11 @@ pub const Module = struct {
     }
 
     pub fn getName(self: Self) ?[:0]const u8 {
-        return @ptrCast(self.name);
+        if (c.m3_GetModuleName(self.ptr)) |cstr| {
+            return cstr[0..:0];
+        }
+
+        return null;
     }
 };
 
@@ -220,9 +322,101 @@ pub const Function = struct {
 
     ptr: c.IM3Function,
 
-    pub fn call(self: Self) Error!void {
-        _ = self;
-        @panic("TODO");
+    pub fn getName(self: Self) [:0]const u8 {
+        return c.m3_GetFunctionName(self.ptr).?[0..:0];
+    }
+
+    pub fn getArgCount(self: Self) usize {
+        return c.m3_GetArgCount(self.ptr);
+    }
+
+    pub fn getRetCount(self: Self) usize {
+        return c.m3_GetRetCount(self.ptr);
+    }
+
+    /// assumes that your index is inbounds
+    pub fn getArgType(self: Self, index: usize) ValueType {
+        const cval = c.m3_GetArgType(self.ptr, @intCast(index));
+        return ValueType.fromC(cval).?;
+    }
+
+    /// assumes that your index is inbounds
+    pub fn getRetType(self: Self, index: usize) ValueType {
+        const cval = c.m3_GetRetType(self.ptr, @intCast(index));
+        return ValueType.fromC(cval).?;
+    }
+
+    pub const CallAllocError = Allocator.Error || Error;
+
+    /// make a function call using allocator for args & return values
+    pub fn callAlloc(
+        self: Self,
+        ally: Allocator,
+        args: []const Value,
+    ) CallAllocError![]const Value {
+        std.debug.assert(args.len == self.getArgCount());
+
+        for (args, 0..) |arg, i| {
+            std.debug.assert(self.getArgType(i) == @as(ValueType, arg));
+        }
+
+        // call
+        const arg_ptrs = try ally.alloc(*const anyopaque, args.len);
+        for (arg_ptrs, args) |*slot, *arg| {
+            slot.* = arg.ptr();
+        }
+
+        try check(c.m3_Call(
+            self.ptr,
+            @intCast(arg_ptrs.len),
+            @ptrCast(arg_ptrs.ptr),
+        ));
+
+        ally.free(arg_ptrs);
+
+        // get results
+        const retc = self.getRetCount();
+        const results = try ally.alloc(Value, retc);
+
+        for (results, 0..) |*value, i| {
+            switch (self.getRetType(i)) {
+                inline else => |tag| {
+                    value.* = @unionInit(Value, @tagName(tag), undefined);
+                }
+            }
+        }
+
+        const ret_ptrs = try ally.alloc(*anyopaque, retc);
+        defer ally.free(ret_ptrs);
+
+        for (ret_ptrs, results) |*slot, *value| {
+            slot.* = value.ptrMut();
+        }
+
+        try check(c.m3_GetResults(
+            self.ptr,
+            @intCast(ret_ptrs.len),
+            @ptrCast(ret_ptrs.ptr),
+        ));
+
+        return results;
+    }
+
+    pub const CallBufError = error { BufferOverflow } || Error;
+
+    /// make a function call using a buffer for storing args & return values
+    pub fn callBuf(
+        self: Self,
+        buf: []u8,
+        args: []const Value,
+    ) CallBufError![]const Value {
+        var fba = std.heap.FixedBufferAllocator.init(buf);
+        return self.callAlloc(fba.allocator(), args) catch |e| {
+            return switch (e) {
+                Allocator.Error.OutOfMemory => CallBufError.BufferOverflow,
+                else => @as(CallBufError, @errSetCast(e)),
+            };
+        };
     }
 };
 

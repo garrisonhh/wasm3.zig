@@ -25,17 +25,15 @@ pub fn main() !void {
     defer runtime.deinit();
 
     var module = try w3.Module.parse(env, &bytecode);
-    defer module.deinit();
+    errdefer module.deinit();
 
     try runtime.load(&module);
 
     const main_func = try runtime.findFunction("main");
 
     // TODO zig interface
-    _ = w3.c.m3_CallV(main_func.ptr);
-    var ret0: i32 = undefined;
-    var ret1: f32 = undefined;
-    _ = w3.c.m3_GetResultsV(main_func.ptr, &ret0, &ret1);
+    var buf: [256]u8 = undefined;
+    const results = try main_func.callBuf(&buf, &.{});
 
-    std.debug.print("got results: {d} {d}\n", .{ ret0, ret1 });
+    std.debug.print("got results: {d}\n", .{results});
 }
