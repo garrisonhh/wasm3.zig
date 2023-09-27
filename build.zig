@@ -10,7 +10,8 @@ const wasm3_cflags: []const []const u8 = &.{};
 fn addCSources(b: *Build, com: *Build.Step.Compile) !void {
     const ally = b.allocator;
 
-    var wasm3_dir = try fs.cwd().openIterableDir(wasm3_source_dir, .{});
+    const build_dir = b.build_root.handle;
+    var wasm3_dir = try build_dir.openIterableDir(wasm3_source_dir, .{});
     defer wasm3_dir.close();
 
     var walker = try wasm3_dir.walk(ally);
@@ -25,19 +26,22 @@ fn addCSources(b: *Build, com: *Build.Step.Compile) !void {
         const path = try fs.path.join(ally, &.{ wasm3_source_dir, entry.path });
         defer ally.free(path);
 
+        const lazy = Build.LazyPath{ .path = path };
+        const abspath = lazy.getPath(b);
+
         com.addCSourceFile(.{
-            .file = .{ .path = path },
+            .file = .{ .cwd_relative = abspath },
             .flags = wasm3_cflags,
         });
     }
 }
 
 /// builds the  example
-pub fn build(b: *Build) void {
+pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const module = b.createModule(.{
+    const module = b.addModule("wasm3", .{
         .source_file = .{ .path = "src/main.zig" },
     });
 
@@ -52,9 +56,7 @@ pub fn build(b: *Build) void {
 
     example.linkLibC();
     example.addIncludePath(.{ .path = wasm3_source_dir });
-    addCSources(b, example) catch |e| {
-        std.debug.panic("unhandled error: {s}", .{@errorName(e)});
-    };
+    try addCSources(b, example);
 
     if (optimize == .Debug) {
         example.defineCMacro("DEBUG", null);
