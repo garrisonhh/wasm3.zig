@@ -25,7 +25,7 @@ pub fn main() !void {
     defer runtime.deinit();
 
     var module = try w3.Module.parse(env, &bytecode);
-    errdefer module.deinit();
+    defer module.deinit();
 
     std.debug.print("module: {s}\n", .{module.getName()});
 
