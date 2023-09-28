@@ -45,14 +45,30 @@ pub fn build(b: *Build) !void {
         .source_file = .{ .path = "src/main.zig" },
     });
 
+    const lib = b.addStaticLibrary(.{
+        .name = "wasm3",
+        .root_source_file = .{ .path = "src/main.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+
+    lib.linkLibC();
+
+    const include_lazy = Build.LazyPath{ .path = wasm3_source_dir };
+    const include_abspath = include_lazy.getPath(b);
+    lib.addIncludePath(.{ .cwd_relative = include_abspath });
+
+    try addCSources(b, lib);
+
+    b.installArtifact(lib);
+
+    // example build
     const example = b.addExecutable(.{
         .name = "example",
         .root_source_file = .{ .path = "example/main.zig" },
         .target = target,
         .optimize = optimize,
     });
-
-    b.installArtifact(example);
 
     example.linkLibC();
     example.addIncludePath(.{ .path = wasm3_source_dir });
