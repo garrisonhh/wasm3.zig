@@ -15,7 +15,7 @@ pub const c = @cImport({
 fn rawCStrToSlice(raw_cstr: [*c]const u8) [:0]const u8 {
     const cstr = @as([*:0]const u8, @ptrCast(raw_cstr));
     const len = std.mem.indexOfSentinel(u8, 0, cstr);
-    return cstr[0..len:0];
+    return cstr[0..len :0];
 }
 
 // errors ======================================================================
@@ -120,6 +120,16 @@ pub const ValueType = enum {
     f32,
     f64,
 
+    pub fn zigType(comptime self: Self) type {
+        inline for (@typeInfo(Value).Union.fields) |field| {
+            if (std.mem.eql(u8, @tagName(self), field.name)) {
+                return field.type;
+            }
+        }
+
+        unreachable;
+    }
+
     const TableEntry = struct {
         val: Self,
         cval: c_int,
@@ -160,6 +170,10 @@ pub const Value = union(ValueType) {
     i64: i64,
     f32: f32,
     f64: f64,
+
+    pub fn eql(a: Self, b: Self) bool {
+        return std.meta.eql(a, b);
+    }
 
     fn fromC(cval: c.M3TaggedValue) Self {
         return switch (ValueType.fromC(cval.type).?) {
@@ -386,7 +400,7 @@ pub const Function = struct {
             switch (self.getRetType(i)) {
                 inline else => |tag| {
                     value.* = @unionInit(Value, @tagName(tag), undefined);
-                }
+                },
             }
         }
 
@@ -406,7 +420,7 @@ pub const Function = struct {
         return results;
     }
 
-    pub const CallBufError = error { BufferOverflow } || Error;
+    pub const CallBufError = error{BufferOverflow} || Error;
 
     /// make a function call using a buffer for storing args & return values
     pub fn callBuf(
