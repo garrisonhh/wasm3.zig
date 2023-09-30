@@ -82,6 +82,10 @@ pub fn build(b: *Build) !void {
 
     example.addModule("wasm3", module);
 
+    const install_example = b.addInstallArtifact(example, .{});
+    const install_example_step = b.step("example", "build example");
+    install_example_step.dependOn(&install_example.step);
+
     const run_example = b.addRunArtifact(example);
     const run_example_step = b.step("run", "run example");
     run_example_step.dependOn(&run_example.step);

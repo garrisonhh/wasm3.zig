@@ -256,6 +256,12 @@ pub const Runtime = struct {
         c.m3_FreeRuntime(self.ptr);
     }
 
+    pub fn printInfo(self: Self) void {
+        if (in_debug) {
+            c.m3_PrintRuntimeInfo(self.ptr);
+        }
+    }
+
     /// get the memory region associated with the runtime
     pub fn getMemory(self: Self) []u8 {
         var nbytes: u32 = undefined;
@@ -303,6 +309,8 @@ pub const Module = struct {
     pub fn deinit(self: *Self) void {
         if (!self.loaded) c.m3_FreeModule(self.ptr);
     }
+
+    pub const linkRawFunction = linkRawZigFunction;
 
     pub fn getRuntime(self: Self) ?Runtime {
         if (c.m3_GetModuleRuntime(self.ptr)) |runtime_ptr| {
@@ -438,6 +446,97 @@ pub const Function = struct {
     }
 };
 
+pub const RawFunction = fn(
+    Runtime,
+    params: []const Value,
+    out_results: []Value,
+) void;
+
+/// calls
+fn rawZigFunctionWrapper(
+    runtime: c.IM3Runtime,
+    import_ctx: c.IM3ImportContext,
+    stack: [*c]u64,
+    mem: ?*anyopaque,
+) callconv(.C) ?*const anyopaque {
+    _ = mem;
+
+    const function = Function{ .ptr = import_ctx[0].function };
+    const raw_function: *const RawFunction = @ptrCast(import_ctx[0].userdata);
+
+    // set up arg buf
+    const argc = function.getArgCount();
+    var arg_buf: [256]Value = undefined;
+    const args = arg_buf[0..argc];
+
+    for (args, 0..) |*slot, i| {
+        switch (function.getArgType(i)) {
+            inline else => |arg_type| {
+                const FieldType = std.meta.FieldType(Value, arg_type);
+
+                slot.* = @unionInit(
+                    Value,
+                    @tagName(arg_type),
+                    @as(*const FieldType, @ptrCast(&stack[i])).*,
+                );
+            },
+        }
+    }
+
+    // set up ret buf
+    const retc = function.getRetCount();
+    var ret_buf: [256]Value = undefined;
+    const rets = ret_buf[0..retc];
+
+    raw_function(.{ .ptr = runtime }, args, rets);
+
+    // put return values on stack
+    for (rets, 0..) |val, i| {
+        switch (val) {
+            inline else => |data| {
+                @as(*@TypeOf(data), @ptrCast(&stack[i])).* = data;
+            }
+        }
+    }
+
+    return null;
+}
+
+fn wasm3SigChar(t: ValueType) u8 {
+    return switch (t) {
+        .i32 => 'i',
+        .i64 => 'I',
+        .f32 => 'f',
+        .f64 => 'F',
+    };
+}
+
+fn linkRawZigFunction(
+    module: Module,
+    from_module: [:0]const u8,
+    name: [:0]const u8,
+    params: []const ValueType,
+    results: []const ValueType,
+    func_ptr: *const RawFunction,
+) Error!void {
+    var sig = std.BoundedArray(u8, 512){};
+
+    for (results) |t| sig.appendAssumeCapacity(wasm3SigChar(t));
+    sig.appendAssumeCapacity('(');
+    for (params) |t| sig.appendAssumeCapacity(wasm3SigChar(t));
+    sig.appendAssumeCapacity(')');
+    sig.appendAssumeCapacity(0);
+
+    try check(c.m3_LinkRawFunctionEx(
+        module.ptr,
+        from_module.ptr,
+        name.ptr,
+        @ptrCast(&sig.buffer),
+        rawZigFunctionWrapper,
+        @ptrCast(func_ptr),
+    ));
+}
+
 // debugging functions =========================================================
 
 fn wrapDebugFn(comptime f: fn () callconv(.C) void) fn () void {
@@ -448,6 +547,5 @@ fn wrapDebugFn(comptime f: fn () callconv(.C) void) fn () void {
     }.wrapped;
 }
 
-pub const printRuntimeInfo = wrapDebugFn(c.m3_PrintRuntimeInfo);
 pub const printM3Info = wrapDebugFn(c.m3_PrintM3Info);
 pub const printProfilerInfo = wrapDebugFn(c.m3_PrintProfilerInfo);
