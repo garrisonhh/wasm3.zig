@@ -8,9 +8,7 @@ const builtin = @import("builtin");
 const in_debug = builtin.mode == .Debug;
 
 /// keep public for hackability
-pub const c = @cImport({
-    @cInclude("wasm3.h");
-});
+pub const c = @import("m3.zig");
 
 fn rawCStrToSlice(raw_cstr: [*c]const u8) [:0]const u8 {
     const cstr = @as([*:0]const u8, @ptrCast(raw_cstr));
@@ -24,12 +22,12 @@ const ErrorTableEntry = struct {
     const Self = @This();
 
     err: anyerror,
-    msg_ptr: [*:0]const u8,
+    name: []const u8,
 
-    fn init(err: anyerror, msg_ptr: [*:0]const u8) Self {
+    fn init(err: anyerror, name: []const u8) Self {
         return .{
             .err = err,
-            .msg_ptr = msg_ptr,
+            .name = name,
         };
     }
 };
@@ -37,54 +35,54 @@ const ErrorTableEntry = struct {
 const error_table: []const ErrorTableEntry = table: {
     const e = ErrorTableEntry.init;
     break :table &.{
-        e(error.MallocFailed, "mallocFailed"),
-        e(error.IncompatibleWasmVersion, "incompatibleWasmVersion"),
-        e(error.WasmMalformed, "wasmMalformed"),
-        e(error.MisorderedWasmSection, "misorderedWasmSection"),
-        e(error.WasmUnderrun, "wasmUnderrun"),
-        e(error.WasmOverrun, "wasmOverrun"),
-        e(error.WasmMissingInitExpr, "wasmMissingInitExpr"),
-        e(error.LebOverflow, "lebOverflow"),
-        e(error.MissingUTF8, "missingUTF8"),
-        e(error.WasmSectionUnderrun, "wasmSectionUnderrun"),
-        e(error.WasmSectionOverrun, "wasmSectionOverrun"),
-        e(error.InvalidTypeId, "invalidTypeId"),
-        e(error.TooManyMemorySections, "tooManyMemorySections"),
-        e(error.TooManyArgsRets, "tooManyArgsRets"),
-        e(error.ModuleNotLinked, "moduleNotLinked"),
-        e(error.ModuleAlreadyLinked, "moduleAlreadyLinked"),
-        e(error.FunctionLookupFailed, "functionLookupFailed"),
-        e(error.FunctionImportMissing, "functionImportMissing"),
-        e(error.MalformedFunctionSignature, "malformedFunctionSignature"),
-        e(error.NoCompiler, "noCompiler"),
-        e(error.UnknownOpcode, "unknownOpcode"),
-        e(error.RestrictedOpcode, "restrictedOpcode"),
-        e(error.FunctionStackOverflow, "functionStackOverflow"),
-        e(error.FunctionStackUnderrun, "functionStackUnderrun"),
-        e(error.MallocFailedCodePage, "mallocFailedCodePage"),
-        e(error.SettingImmutableGlobal, "settingImmutableGlobal"),
-        e(error.TypeMismatch, "typeMismatch"),
-        e(error.TypeCountMismatch, "typeCountMismatch"),
-        e(error.MissingCompiledCode, "missingCompiledCode"),
-        e(error.WasmMemoryOverflow, "wasmMemoryOverflow"),
-        e(error.GlobalMemoryNotAllocated, "globalMemoryNotAllocated"),
-        e(error.GlobaIndexOutOfBounds, "globaIndexOutOfBounds"),
-        e(error.ArgumentCountMismatch, "argumentCountMismatch"),
-        e(error.ArgumentTypeMismatch, "argumentTypeMismatch"),
-        e(error.GlobalLookupFailed, "globalLookupFailed"),
-        e(error.GlobalTypeMismatch, "globalTypeMismatch"),
-        e(error.GlobalNotMutable, "globalNotMutable"),
-        e(error.TrapOutOfBoundsMemoryAccess, "trapOutOfBoundsMemoryAccess"),
-        e(error.TrapDivisionByZero, "trapDivisionByZero"),
-        e(error.TrapIntegerOverflow, "trapIntegerOverflow"),
-        e(error.TrapIntegerConversion, "trapIntegerConversion"),
-        e(error.TrapIndirectCallTypeMismatch, "trapIndirectCallTypeMismatch"),
-        e(error.TrapTableIndexOutOfRange, "trapTableIndexOutOfRange"),
-        e(error.TrapTableElementIsNull, "trapTableElementIsNull"),
-        e(error.TrapExit, "trapExit"),
-        e(error.TrapAbort, "trapAbort"),
-        e(error.TrapUnreachable, "trapUnreachable"),
-        e(error.TrapStackOverflow, "trapStackOverflow"),
+        e(error.MallocFailed, "m3Err_mallocFailed"),
+        e(error.IncompatibleWasmVersion, "m3Err_incompatibleWasmVersion"),
+        e(error.WasmMalformed, "m3Err_wasmMalformed"),
+        e(error.MisorderedWasmSection, "m3Err_misorderedWasmSection"),
+        e(error.WasmUnderrun, "m3Err_wasmUnderrun"),
+        e(error.WasmOverrun, "m3Err_wasmOverrun"),
+        e(error.WasmMissingInitExpr, "m3Err_wasmMissingInitExpr"),
+        e(error.LebOverflow, "m3Err_lebOverflow"),
+        e(error.MissingUTF8, "m3Err_missingUTF8"),
+        e(error.WasmSectionUnderrun, "m3Err_wasmSectionUnderrun"),
+        e(error.WasmSectionOverrun, "m3Err_wasmSectionOverrun"),
+        e(error.InvalidTypeId, "m3Err_invalidTypeId"),
+        e(error.TooManyMemorySections, "m3Err_tooManyMemorySections"),
+        e(error.TooManyArgsRets, "m3Err_tooManyArgsRets"),
+        e(error.ModuleNotLinked, "m3Err_moduleNotLinked"),
+        e(error.ModuleAlreadyLinked, "m3Err_moduleAlreadyLinked"),
+        e(error.FunctionLookupFailed, "m3Err_functionLookupFailed"),
+        e(error.FunctionImportMissing, "m3Err_functionImportMissing"),
+        e(error.MalformedFunctionSignature, "m3Err_malformedFunctionSignature"),
+        e(error.NoCompiler, "m3Err_noCompiler"),
+        e(error.UnknownOpcode, "m3Err_unknownOpcode"),
+        e(error.RestrictedOpcode, "m3Err_restrictedOpcode"),
+        e(error.FunctionStackOverflow, "m3Err_functionStackOverflow"),
+        e(error.FunctionStackUnderrun, "m3Err_functionStackUnderrun"),
+        e(error.MallocFailedCodePage, "m3Err_mallocFailedCodePage"),
+        e(error.SettingImmutableGlobal, "m3Err_settingImmutableGlobal"),
+        e(error.TypeMismatch, "m3Err_typeMismatch"),
+        e(error.TypeCountMismatch, "m3Err_typeCountMismatch"),
+        e(error.MissingCompiledCode, "m3Err_missingCompiledCode"),
+        e(error.WasmMemoryOverflow, "m3Err_wasmMemoryOverflow"),
+        e(error.GlobalMemoryNotAllocated, "m3Err_globalMemoryNotAllocated"),
+        e(error.GlobaIndexOutOfBounds, "m3Err_globaIndexOutOfBounds"),
+        e(error.ArgumentCountMismatch, "m3Err_argumentCountMismatch"),
+        e(error.ArgumentTypeMismatch, "m3Err_argumentTypeMismatch"),
+        e(error.GlobalLookupFailed, "m3Err_globalLookupFailed"),
+        e(error.GlobalTypeMismatch, "m3Err_globalTypeMismatch"),
+        e(error.GlobalNotMutable, "m3Err_globalNotMutable"),
+        e(error.TrapOutOfBoundsMemoryAccess, "m3Err_trapOutOfBoundsMemoryAccess"),
+        e(error.TrapDivisionByZero, "m3Err_trapDivisionByZero"),
+        e(error.TrapIntegerOverflow, "m3Err_trapIntegerOverflow"),
+        e(error.TrapIntegerConversion, "m3Err_trapIntegerConversion"),
+        e(error.TrapIndirectCallTypeMismatch, "m3Err_trapIndirectCallTypeMismatch"),
+        e(error.TrapTableIndexOutOfRange, "m3Err_trapTableIndexOutOfRange"),
+        e(error.TrapTableElementIsNull, "m3Err_trapTableElementIsNull"),
+        e(error.TrapExit, "m3Err_trapExit"),
+        e(error.TrapAbort, "m3Err_trapAbort"),
+        e(error.TrapUnreachable, "m3Err_trapUnreachable"),
+        e(error.TrapStackOverflow, "m3Err_trapStackOverflow"),
     };
 };
 
@@ -103,7 +101,7 @@ pub const Error = e: {
 fn check(res: c.M3Result) Error!void {
     if (res) |msg_ptr| {
         inline for (error_table) |entry| {
-            if (msg_ptr == @field(c, "m3Err_" ++ entry.msg_ptr)) {
+            if (msg_ptr == @field(c, entry.name)) {
                 return @as(Error, @errSetCast(entry.err));
             }
         }
@@ -130,36 +128,22 @@ pub const ValueType = enum {
         unreachable;
     }
 
-    const TableEntry = struct {
-        val: Self,
-        cval: c_int,
-    };
+    fn fromC(raw: c.M3Value.Type) ?Self {
+        return switch (raw) {
+            inline .i32,
+            .i64,
+            .f32,
+            .f64,
+            => |tag| std.enums.nameCast(Self, tag),
 
-    const table = [_]TableEntry{
-        .{ .val = .i32, .cval = c.c_m3Type_i32 },
-        .{ .val = .i64, .cval = c.c_m3Type_i64 },
-        .{ .val = .f32, .cval = c.c_m3Type_f32 },
-        .{ .val = .f64, .cval = c.c_m3Type_f64 },
-    };
-
-    fn fromC(n: c_uint) ?Self {
-        inline for (table) |entry| {
-            if (n == entry.cval) {
-                return entry.val;
-            }
-        }
-
-        return null;
+            else => null,
+        };
     }
 
-    fn intoC(self: Self) c_uint {
-        inline for (table) |entry| {
-            if (entry.val == self) {
-                return entry.cval;
-            }
-        }
-
-        unreachable;
+    fn intoC(self: Self) c.M3Value.Type {
+        return switch (self) {
+            inline else => |tag| std.enums.nameCast(c.M3Value.Type, tag),
+        };
     }
 };
 
@@ -175,7 +159,7 @@ pub const Value = union(ValueType) {
         return std.meta.eql(a, b);
     }
 
-    fn fromC(cval: c.M3TaggedValue) Self {
+    fn fromC(cval: c.M3Value) Self {
         return switch (ValueType.fromC(cval.type).?) {
             inline else => |data, tag| @unionInit(Self, @tagName(tag), data),
         };
@@ -185,7 +169,7 @@ pub const Value = union(ValueType) {
         return switch (self) {
             inline else => |data, tag| .{
                 .type = tag.intoC(),
-                .value = @unionInit(c.union_M3ValueUnion, @tagName(tag), data),
+                .value = @unionInit(c.M3Value.Data, @tagName(tag), data),
             },
         };
     }
@@ -224,7 +208,7 @@ pub const Value = union(ValueType) {
 pub const Environment = struct {
     const Self = @This();
 
-    ptr: c.IM3Environment,
+    ptr: *c.M3Environment,
 
     pub fn init() Self {
         return .{ .ptr = c.m3_NewEnvironment() };
@@ -239,7 +223,7 @@ pub const Environment = struct {
 pub const Runtime = struct {
     const Self = @This();
 
-    ptr: c.IM3Runtime,
+    ptr: *c.M3Runtime,
 
     pub const Config = struct {
         stack_bytes: u32 = 64 * 1024,
@@ -282,7 +266,7 @@ pub const Runtime = struct {
     }
 
     pub fn findFunction(self: Self, name: [:0]const u8) Error!Function {
-        var fun_ptr: c.IM3Function = undefined;
+        var fun_ptr: *c.M3Function = undefined;
         try check(c.m3_FindFunction(&fun_ptr, self.ptr, name.ptr));
         return .{ .ptr = fun_ptr };
     }
@@ -291,11 +275,11 @@ pub const Runtime = struct {
 pub const Module = struct {
     const Self = @This();
 
-    ptr: c.IM3Module,
+    ptr: *c.M3Module,
     loaded: bool = false,
 
     pub fn parse(env: Environment, bytecode: []const u8) Error!Self {
-        var ptr: c.IM3Module = undefined;
+        var ptr: *c.M3Module = undefined;
         try check(c.m3_ParseModule(
             env.ptr,
             &ptr,
@@ -345,7 +329,7 @@ pub const Module = struct {
 pub const Function = struct {
     const Self = @This();
 
-    ptr: c.IM3Function,
+    ptr: *c.M3Function,
 
     pub fn getName(self: Self) [:0]const u8 {
         const raw_cstr = c.m3_GetFunctionName(self.ptr);
@@ -446,7 +430,7 @@ pub const Function = struct {
     }
 };
 
-pub const RawFunction = fn(
+pub const RawFunction = fn (
     Runtime,
     params: []const Value,
     out_results: []Value,
@@ -454,15 +438,15 @@ pub const RawFunction = fn(
 
 /// calls
 fn rawZigFunctionWrapper(
-    runtime: c.IM3Runtime,
-    import_ctx: c.IM3ImportContext,
-    stack: [*c]u64,
+    runtime: *c.M3Runtime,
+    import_ctx: *c.M3ImportContext,
+    stack: [*]u64,
     mem: ?*anyopaque,
 ) callconv(.C) ?*const anyopaque {
     _ = mem;
 
-    const function = Function{ .ptr = import_ctx[0].function };
-    const raw_function: *const RawFunction = @ptrCast(import_ctx[0].userdata);
+    const function = Function{ .ptr = import_ctx.function };
+    const raw_function: *const RawFunction = @ptrCast(import_ctx.userdata.?);
 
     // set up arg buf
     const argc = function.getArgCount();
@@ -495,7 +479,7 @@ fn rawZigFunctionWrapper(
         switch (val) {
             inline else => |data| {
                 @as(*@TypeOf(data), @ptrCast(&stack[i])).* = data;
-            }
+            },
         }
     }
 

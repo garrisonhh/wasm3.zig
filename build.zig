@@ -54,10 +54,13 @@ pub fn build(b: *Build) !void {
 
     lib.linkLibC();
 
-    const include_lazy = Build.LazyPath{ .path = wasm3_source_dir };
-    const include_abspath = include_lazy.getPath(b);
-    lib.addIncludePath(.{ .cwd_relative = include_abspath });
+    if (optimize == .Debug) {
+        lib.defineCMacro("DEBUG", null);
+    } else {
+        lib.defineCMacro("NDEBUG", null);
+    }
 
+    lib.addIncludePath(.{ .path = wasm3_source_dir });
     try addCSources(b, lib);
 
     b.installArtifact(lib);
@@ -71,15 +74,7 @@ pub fn build(b: *Build) !void {
     });
 
     example.linkLibC();
-    example.addIncludePath(.{ .path = wasm3_source_dir });
-    try addCSources(b, example);
-
-    if (optimize == .Debug) {
-        example.defineCMacro("DEBUG", null);
-    } else {
-        example.defineCMacro("NDEBUG", null);
-    }
-
+    example.linkLibrary(lib);
     example.addModule("wasm3", module);
 
     const install_example = b.addInstallArtifact(example, .{});
